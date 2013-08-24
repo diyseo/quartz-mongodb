@@ -122,7 +122,7 @@ public class MongoDBJobStore implements JobStore, Constants {
     storeJobInMongo(newJob, replaceExisting);
   }
 
-  public void storeJobsAndTriggers(Map<JobDetail, List<Trigger>> triggersAndJobs, boolean replace)
+  public void storeJobsAndTriggers(Map<JobDetail,Set<? extends Trigger>> triggersAndJobs, boolean replace)
       throws JobPersistenceException {
     throw new UnsupportedOperationException();
   }
