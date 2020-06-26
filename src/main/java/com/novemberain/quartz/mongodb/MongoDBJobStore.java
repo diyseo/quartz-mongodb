@@ -10,7 +10,7 @@
 package com.novemberain.quartz.mongodb;
 
 import com.mongodb.*;
-import com.mongodb.MongoException.DuplicateKey;
+import com.mongodb.DuplicateKeyException;
 import org.bson.types.ObjectId;
 import org.quartz.Calendar;
 import org.quartz.*;
@@ -49,6 +49,7 @@ public class MongoDBJobStore implements JobStore, Constants {
   private DBCollection pausedJobGroupsCollection;
   private String instanceId;
   private String[] addresses;
+  private String uri;
   private String username;
   private String password;
   private SchedulerSignaler signaler;
@@ -62,8 +63,8 @@ public class MongoDBJobStore implements JobStore, Constants {
     this.loadHelper = loadHelper;
     this.signaler = signaler;
 
-    if (addresses == null || addresses.length == 0) {
-      throw new SchedulerConfigException("At least one MongoDB address must be specified.");
+    if (uri == null || uri == "") {
+      throw new SchedulerConfigException("MongoDB URI must be specified.");
     }
 
     this.mongo = connectToMongoDB();
@@ -516,7 +517,7 @@ public class MongoDBJobStore implements JobStore, Constants {
         locksCollection.insert(lock);
         log.debug("Aquired trigger " + trigger.getKey());
         triggers.add(trigger);
-      } catch (DuplicateKey e) {
+      } catch (DuplicateKeyException e) {
 
         OperableTrigger trigger = toTrigger(dbObj);
 
@@ -667,6 +668,14 @@ public class MongoDBJobStore implements JobStore, Constants {
     this.dbName = dbName;
   }
 
+  public String getUri() {
+    return uri;
+  }
+
+  public void setUri(String uri) {
+    this.uri = uri;
+  }
+
   public void setCollectionPrefix(String prefix) {
     collectionPrefix = prefix + "_";
   }
@@ -710,25 +719,12 @@ public class MongoDBJobStore implements JobStore, Constants {
     DB db = mongo.getDB(dbName);
     // MongoDB defaults are insane, set a reasonable write concern explicitly. MK.
     db.setWriteConcern(WriteConcern.JOURNAL_SAFE);
-    if (username != null) {
-      db.authenticate(username, password.toCharArray());
-    }
     return db;
   }
 
   private Mongo connectToMongoDB() throws SchedulerConfigException {
-    MongoOptions options = new MongoOptions();
-    options.safe = true;
-
     try {
-      ArrayList<ServerAddress> serverAddresses = new ArrayList<ServerAddress>();
-      for (String a : addresses) {
-        serverAddresses.add(new ServerAddress(a));
-      }
-      return new Mongo(serverAddresses, options);
-
-    } catch (UnknownHostException e) {
-      throw new SchedulerConfigException("Could not connect to MongoDB.", e);
+      return new MongoClient(new MongoClientURI(uri));
     } catch (MongoException e) {
       throw new SchedulerConfigException("Could not connect to MongoDB.", e);
     }
@@ -848,23 +844,23 @@ public class MongoDBJobStore implements JobStore, Constants {
     BasicDBObject keys = new BasicDBObject();
     keys.put(JOB_KEY_NAME, 1);
     keys.put(JOB_KEY_GROUP, 1);
-    jobCollection.ensureIndex(keys, null, true);
+    jobCollection.createIndex(keys, null, true);
 
     keys = new BasicDBObject();
     keys.put(KEY_NAME, 1);
     keys.put(KEY_GROUP, 1);
-    triggerCollection.ensureIndex(keys, null, true);
+    triggerCollection.createIndex(keys, null, true);
 
     keys = new BasicDBObject();
     keys.put(LOCK_KEY_NAME, 1);
     keys.put(LOCK_KEY_GROUP, 1);
-    locksCollection.ensureIndex(keys, null, true);
+    locksCollection.createIndex(keys, null, true);
     // remove all locks for this instance on startup
     locksCollection.remove(new BasicDBObject(LOCK_INSTANCE_ID, instanceId));
 
     keys = new BasicDBObject();
     keys.put(CALENDAR_NAME, 1);
-    calendarCollection.ensureIndex(keys, null, true);
+    calendarCollection.createIndex(keys, null, true);
   }
 
   protected void storeTrigger(OperableTrigger newTrigger, ObjectId jobId, boolean replaceExisting) throws ObjectAlreadyExistsException {
@@ -890,7 +886,7 @@ public class MongoDBJobStore implements JobStore, Constants {
 
     try {
       triggerCollection.insert(trigger);
-    } catch (DuplicateKey key) {
+    } catch (DuplicateKeyException key) {
       if (replaceExisting) {
         trigger.remove("_id");
         triggerCollection.update(keyToDBObject(newTrigger.getKey()), trigger);
@@ -913,7 +909,7 @@ public class MongoDBJobStore implements JobStore, Constants {
     job.put(JOB_DURABILITY, newJob.isDurable());
 
     job.putAll(newJob.getJobDataMap());
-    
+
     boolean existing = jobCollection.findOne(keyDbo) != null;
     try {
       if (existing && replaceExisting) {
@@ -923,7 +919,7 @@ public class MongoDBJobStore implements JobStore, Constants {
       }
 
       return (ObjectId) job.get("_id");
-    } catch (DuplicateKey e) {
+    } catch (DuplicateKeyException e) {
       throw new ObjectAlreadyExistsException(e.getMessage());
     }
   }
