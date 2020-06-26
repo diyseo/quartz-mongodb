@@ -1,6 +1,7 @@
-(defproject upcitydev/quartz-mongodb "1.3.0-beta3-SNAPSHOT"
+(defproject org.clojars.upcitydev/quartz-mongodb "1.3.0-beta3-SNAPSHOT"
   :description "A MongoDB-backed store for Quartz Scheduler and Quartzite"
   :min-lein-version "2.0.0"
+  :url "https://github.com/diyseo/quartz-mongodb"
   :license {:name "Apache License 2.0"}
   :dependencies [[org.quartz-scheduler/quartz   "2.2.0"]
                  [org.mongodb/mongo-java-driver "3.8.1"]
